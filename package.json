@@ -5,11 +5,15 @@
   "description": "Demos out of order streaming with declarative shadow DOM",
   "scripts": {
     "start": "npm run -s build && npm run -s demo",
-    "build": "tsc",
-    "demo": "node dist/server.js"
+    "build": "npm run -s clean && npm run -s build:ts && npm run -s build:html",
+    "build:ts": "tsc",
+    "build:html": "mkdir -p dist/ && cp src/*.html dist/",
+    "demo": "http-server dist/",
+    "clean": "rm -rf dist/"
   },
   "license": "MIT",
   "devDependencies": {
+    "http-server": "^14.1.1",
     "typescript": "^5.3.3"
   }
 }

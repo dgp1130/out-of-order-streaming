@@ -1,0 +1,15 @@
+{
+  "name": "out-of-order-streaming",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Demos out of order streaming with declarative shadow DOM",
+  "scripts": {
+    "start": "npm run -s build && npm run -s demo",
+    "build": "tsc",
+    "demo": "node dist/server.js"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

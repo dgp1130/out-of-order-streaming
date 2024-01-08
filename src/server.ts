@@ -39,16 +39,14 @@ async function* renderHtml(): AsyncGenerator<string, void, void> {
 
     ${streamOutOfOrder`
       <header>
-        <h1>${title()}</h1>
+        <h2>${title()}</h2>
       </header>
 
       <main>
         ${content()}
       </main>
 
-      <footer>
-        Copyright ${year()}
-      </footer>
+      <footer>Copyright ${year()}</footer>
     `}
   </body>
 </html>

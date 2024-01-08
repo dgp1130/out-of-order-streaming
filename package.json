@@ -9,11 +9,13 @@
     "build:ts": "tsc",
     "build:html": "mkdir -p dist/ && cp src/*.html dist/",
     "demo": "http-server dist/",
-    "clean": "rm -rf dist/"
+    "clean": "rm -rf dist/",
+    "netlify": "netlify"
   },
   "license": "MIT",
   "devDependencies": {
     "http-server": "^14.1.1",
+    "netlify-cli": "^17.11.1",
     "typescript": "^5.3.3"
   }
 }

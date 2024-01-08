@@ -1,0 +1,5 @@
+# Netlify deployment configuration.
+# See: https://docs.netlify.com/configure-builds/file-based-configuration/
+
+[build]
+publish = "dist/"

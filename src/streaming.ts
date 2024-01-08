@@ -32,7 +32,13 @@ export async function* streamInOrder(
     | Streamable
   >
 ): AsyncGenerator<string, void, void> {
-  const chunks = interleave(literals, interpolations);
+  const chunks = interleave(literals, interpolations).map((chunk) => {
+    if (isStreamable(chunk)) {
+      return OutOfOrderRoot.from(chunk);
+    } else {
+      return chunk;
+    }
+  });
 
   for (const chunk of chunks) {
     if (typeof chunk === 'string') {
@@ -40,46 +46,91 @@ export async function* streamInOrder(
     } else if (chunk instanceof Promise) {
       yield await chunk;
     } else {
+      yield '<div>';
+      yield '<template shadowrootmode="open">';
       yield* renderOutOfOrder(chunk);
+      yield '</template>';
+
+      // Replace each slot in the order the `Promise` values are actually resolved.
+      const indexedAsyncChunks = chunk.tasks
+        .map((promise, index) => promise.then((result) => [
+          result,
+          index,
+        ] as const));
+      for await (const [ chunk, index ] of inResolvedOrder(indexedAsyncChunks)) {
+        yield `<div slot="slot_${index}">${chunk}</div>`;
+      }
+
+      yield '</div>';
     }
   }
 }
 
-async function* renderOutOfOrder({ literals, interpolations }: Streamable):
-    AsyncGenerator<string, void, void> {
-  const chunks = interleave(literals, interpolations);
-  let slotIndex = 0;
+class OutOfOrderRoot {
+  private constructor(
+    public readonly generate: (externalSlotIndex: number) => AsyncGenerator<string, void, void>,
+    public readonly tasks: ReadonlyArray<Promise<unknown>>,
+  ) {}
 
-  yield '<div>';
-  yield '<template shadowrootmode="open">';
+  public static from(streamable: Streamable): OutOfOrderRoot {
+    const interpolations = streamable.interpolations.map((interpolation) => {
+      if (isStreamable(interpolation)) {
+        return OutOfOrderRoot.from(interpolation);
+      } else {
+        return interpolation;
+      }
+    });
 
-  for (const chunk of chunks) {
-    if (typeof chunk === 'string') {
-      yield chunk;
-    } else if (chunk instanceof Promise) {
-      // Instead of awaiting the `Promise`, replace it with a synthetic slot.
-      yield `<slot name="slot_${slotIndex}"></slot>`;
-      slotIndex++;
-    } else {
-      yield* renderOutOfOrder(chunk);
+    async function* generate(externalSlotIndex: number):
+        AsyncGenerator<string, void, void> {
+      const chunks = interleave(streamable.literals, interpolations);
+      let internalSlotIndex = 0;
+
+      yield '<div>';
+      yield '<template shadowrootmode="open">';
+
+      for (const chunk of chunks) {
+        if (typeof chunk === 'string') {
+          yield chunk;
+        } else if (chunk instanceof Promise) {
+          // Instead of awaiting the `Promise`, replace it with a synthetic slot.
+          yield `<slot name="slot_${internalSlotIndex}"></slot>`;
+          internalSlotIndex++;
+        } else {
+          yield* renderOutOfOrder(chunk, internalSlotIndex);
+          internalSlotIndex += chunk.tasks.length;
+        }
+      }
+
+      yield '</template>';
+
+      for (let i = 0; i < internalSlotIndex; ++i) {
+        yield `<slot name="slot_${
+          externalSlotIndex + i}" slot="slot_${i}"></slot>`;
+      }
+
+      yield '</div>';
     }
+
+    const asyncTasks = interpolations
+      .filter((interpolation): interpolation is Promise<string> | OutOfOrderRoot =>
+        interpolation instanceof Promise || interpolation instanceof OutOfOrderRoot
+      )
+      .flatMap((interpolation) => {
+        if (interpolation instanceof OutOfOrderRoot) {
+          return interpolation.tasks;
+        } else {
+          return [ interpolation ];
+        }
+      });
+
+    return new OutOfOrderRoot(generate, asyncTasks);
   }
+}
 
-  yield '</template>';
-
-  // Replace each slot in the order the `Promise` values are actually resolved.
-  const asyncChunks = chunks
-    .filter((chunk): chunk is Promise<string> => chunk instanceof Promise);
-  const indexedAsyncChunks = asyncChunks
-    .map((promise, index) => promise.then((result) => [
-      result,
-      index,
-    ] as const));
-  for await (const [ chunk, index ] of inResolvedOrder(indexedAsyncChunks)) {
-    yield `<div slot="slot_${index}">${chunk}</div>`;
-  }
-
-  yield '</div>';
+async function* renderOutOfOrder(root: OutOfOrderRoot, slotIndex: number = 0):
+    AsyncGenerator<string, void, void> {
+  yield* root.generate(slotIndex);
 }
 
 function interleave<T>(

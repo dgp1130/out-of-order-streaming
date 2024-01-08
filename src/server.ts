@@ -45,7 +45,7 @@ async function* renderHtml(): AsyncGenerator<string, void, void> {
       <main>
         ${content()}
 
-        ${nested()}
+        ${nested(() => nested(() => nested(() => second())))}
       </main>
 
       <footer>Copyright ${year()}</footer>
@@ -65,19 +65,20 @@ async function content(): Promise<string> {
   return 'This is some interesting text content.';
 }
 
-function nested(): Streamable {
+function nested(callback: () => string | Promise<string> | Streamable):
+    Streamable {
   return streamOutOfOrder`
     <ul>
       <li>First</li>
-      <li>${second()}</li>
+      ${callback()}
       <li>Third</li>
     </ul>
   `;
 }
 
 async function second(): Promise<string> {
-  await timeout(500);
-  return 'Second';
+  await timeout(3_000);
+  return '<li>Second</li>';
 }
 
 function year(): string {

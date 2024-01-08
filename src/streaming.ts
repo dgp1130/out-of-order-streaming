@@ -1,21 +1,45 @@
 /** @fileoverview Core streaming implementation. */
 
-export function streamOutOfOrder(
+export async function* streamOutOfOrder(
   literals: readonly string[],
-  ...interpolations: ReadonlyArray<Promise<string> | string>
-): ReadableStream {
+  ...interpolations: ReadonlyArray<
+    | string
+    | Promise<string>
+    | AsyncGenerator<string, void, void>
+  >
+): AsyncGenerator<string, void, void> {
   const chunks = interleave(literals, interpolations);
-  const encoder = new TextEncoder();
 
-  return new ReadableStream({
-    async start(controller): Promise<void> {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(await chunk));
-      }
+  for (const chunk of chunks) {
+    if (typeof chunk === 'string') {
+      yield chunk;
+    } else if (chunk instanceof Promise) {
+      yield await chunk;
+    } else {
+      yield* chunk;
+    }
+  }
+}
 
-      controller.close();
-    },
-  });
+export async function* streamInOrder(
+  literals: readonly string[],
+  ...interpolations: ReadonlyArray<
+    | string
+    | Promise<string>
+    | AsyncGenerator<string, void, void>
+  >
+): AsyncGenerator<string, void, void> {
+  const chunks = interleave(literals, interpolations);
+
+  for (const chunk of chunks) {
+    if (typeof chunk === 'string') {
+      yield chunk;
+    } else if (chunk instanceof Promise) {
+      yield await chunk;
+    } else {
+      yield* chunk;
+    }
+  }
 }
 
 function interleave<First, Second>(

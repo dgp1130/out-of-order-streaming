@@ -8,7 +8,7 @@ Inspired by: https://mastodon.social/@passle/111709021119627922
 
 This demo is hosted at https://dsd-out-of-order-streaming.dwac.dev/. It
 bootstraps a service worker and reloads the page. The service worker then takes
-over and streams content out of order to the page.
+over and streams content out of order to the page. No client-side JavaScript!
 
 ## Algorithm
 
@@ -67,6 +67,83 @@ document which can't leverage this out of order technique.)
 The two files doing most of the work here are:
 *   [`src/server.ts`](/src/server.ts) - Uses `streamOutOfOrder`.
 *   [`src/streaming.ts`](/src/streaming.ts) - Implements `streamOutOfOrder`.
+
+### Composition
+
+We can compose multiple `streamOutOfOrder` calls in the same expression like so:
+
+```typescript
+async function* render(): AsyncGenerator<string, void, void> {
+  yield* streamInOrder`
+    ${streamOutOfOrder`
+      <div>${first()}</div>
+      ${streamOutOfOrder`
+        <div>${second()}</div>
+        <div>${third()}</div>
+      `}
+      <div>${fourth()}</div>
+    `}
+  `;
+}
+```
+
+This still works and will parallelize all four operations. They can be rendered
+in any order depending on which completes first.
+
+This is done by generating a host element for each `streamOutOfOrder` call and
+then binding the slots from the outer element to the inner element. The final
+HTML looks like:
+
+```html
+<div>
+  <template shadowrootmode="open">
+    <div><slot name="outer_first"></slot></div>
+
+    <div>
+      <template shadowrootmode="open">
+        <div><slot name="inner_second"></slot></div>
+        <div><slot name="inner_third"></slot></div>
+      </template>
+
+      <!-- Binds `outer_*` slots to `inner_*` slots. -->
+      <slot name="outer_second" slot="inner_second"></slot>
+      <slot name="outer_third" slot="inner_third"></slot>
+    </div>
+
+    <div><slot name="outer_fourth"></slot></div>
+  </template>
+
+  <!-- Could be in any order -->
+  <div slot="outer_first">First</div>
+  <div slot="outer_second">Second</div>
+  <div slow="outer_third">Third</div>
+  <div slow="outer_fourth">Fourth</div>
+</div>
+```
+
+## Caveats
+
+This definitely isn't a comprehensive out-of-order streaming solution. There are
+a few caveats to be aware of:
+
+*   Cannot stream `<head>` content out of order. Only `<body>` content makes
+    sense with DSD.
+*   Cannot interpolate across a declarative shadow DOM boundary.
+    *   Putting content inside a shadow root creates a new scope of slots.
+        `streamOutOfOrder` automatically handles this for the shadow roots it
+        creates, but it cannot detect and adapt shadow roots it is provided.
+    *   Example:
+        ```typescript
+        streamOutOfOrder`
+          <div>
+            <template shadowrootmode="open">
+              ${content}
+            </template>
+          </div>
+        `;
+        ```
+    *   A more comprehensive parser could potentially modify input shadow roots
+        to make this pattern possible.
 
 ## Internal
 

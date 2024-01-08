@@ -1,16 +1,52 @@
 /** @fileoverview Core streaming implementation. */
 
+const streamable = Symbol('streamable');
+
+export interface Streamable {
+  [streamable]: true;
+  readonly literals: readonly string[];
+  readonly interpolations: ReadonlyArray<string | Promise<string> | Streamable>;
+}
+
 /**
  * Streams content out of order by generating a synthetic shadow root and
  * placing any slow content into the light DOM slots at the end of the root.
  */
-export async function* streamOutOfOrder(
+export function streamOutOfOrder(
   literals: readonly string[],
   ...interpolations: ReadonlyArray<
     | string
     | Promise<string>
+    | Streamable
+  >
+): Streamable {
+  return { literals, interpolations, [streamable]: true };
+}
+
+/** Typical in-order streaming. */
+export async function* streamInOrder(
+  literals: readonly string[],
+  ...interpolations: ReadonlyArray<
+    | string
+    | Promise<string>
+    | Streamable
   >
 ): AsyncGenerator<string, void, void> {
+  const chunks = interleave(literals, interpolations);
+
+  for (const chunk of chunks) {
+    if (typeof chunk === 'string') {
+      yield chunk;
+    } else if (chunk instanceof Promise) {
+      yield await chunk;
+    } else {
+      yield* renderOutOfOrder(chunk);
+    }
+  }
+}
+
+async function* renderOutOfOrder({ literals, interpolations }: Streamable):
+    AsyncGenerator<string, void, void> {
   const chunks = interleave(literals, interpolations);
   let slotIndex = 0;
 
@@ -20,10 +56,12 @@ export async function* streamOutOfOrder(
   for (const chunk of chunks) {
     if (typeof chunk === 'string') {
       yield chunk;
-    } else {
+    } else if (chunk instanceof Promise) {
       // Instead of awaiting the `Promise`, replace it with a synthetic slot.
       yield `<slot name="slot_${slotIndex}"></slot>`;
       slotIndex++;
+    } else {
+      yield* renderOutOfOrder(chunk);
     }
   }
 
@@ -44,28 +82,6 @@ export async function* streamOutOfOrder(
   yield '</div>';
 }
 
-/** Typical in-order streaming. */
-export async function* streamInOrder(
-  literals: readonly string[],
-  ...interpolations: ReadonlyArray<
-    | string
-    | Promise<string>
-    | AsyncGenerator<string, void, void>
-  >
-): AsyncGenerator<string, void, void> {
-  const chunks = interleave(literals, interpolations);
-
-  for (const chunk of chunks) {
-    if (typeof chunk === 'string') {
-      yield chunk;
-    } else if (chunk instanceof Promise) {
-      yield await chunk;
-    } else {
-      yield* chunk;
-    }
-  }
-}
-
 function interleave<T>(
   literals: readonly string[],
   interpolations: readonly T[],
@@ -76,6 +92,11 @@ function interleave<T>(
 
   const zipped = zip(literals.slice(0, -1), interpolations);
   return zipped.flatMap(([ f, s ]) => [ f, s ]).concat(literals.at(-1)!);
+}
+
+function isStreamable(value: unknown): value is Streamable {
+  return typeof value === 'object' && value !== null
+          && streamable in value;
 }
 
 function zip<First, Second>(first: readonly First[], second: readonly Second[]):

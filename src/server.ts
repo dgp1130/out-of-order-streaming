@@ -1,6 +1,6 @@
 /** @fileoverview Simple server embedded in a service worker. */
 
-import { streamInOrder, streamOutOfOrder } from './streaming.js';
+import { Streamable, streamInOrder, streamOutOfOrder } from './streaming.js';
 
 export function serveIndex(): Response {
   return new Response(readableStreamFromGenerator(renderHtml()), {
@@ -44,6 +44,8 @@ async function* renderHtml(): AsyncGenerator<string, void, void> {
 
       <main>
         ${content()}
+
+        ${nested()}
       </main>
 
       <footer>Copyright ${year()}</footer>
@@ -61,6 +63,21 @@ async function title(): Promise<string> {
 async function content(): Promise<string> {
   await timeout(1_000);
   return 'This is some interesting text content.';
+}
+
+function nested(): Streamable {
+  return streamOutOfOrder`
+    <ul>
+      <li>First</li>
+      <li>${second()}</li>
+      <li>Third</li>
+    </ul>
+  `;
+}
+
+async function second(): Promise<string> {
+  await timeout(500);
+  return 'Second';
 }
 
 function year(): string {

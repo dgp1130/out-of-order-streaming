@@ -11,10 +11,12 @@ self.addEventListener('fetch', (event) => {
   evt.respondWith(serveIndex());
 });
 
-self.addEventListener('install', () => {
-  (self as unknown as ServiceWorkerGlobalScope).skipWaiting();
+self.addEventListener('install', (event) => {
+  (event as any).waitUntil(
+    (self as unknown as ServiceWorkerGlobalScope).skipWaiting());
 });
 
-self.addEventListener('activate', () => {
-  (self as unknown as ServiceWorkerGlobalScope).clients.claim();
+self.addEventListener('activate', (event) => {
+  (event as any).waitUntil(
+    (self as unknown as ServiceWorkerGlobalScope).clients.claim());
 });

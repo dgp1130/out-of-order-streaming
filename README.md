@@ -146,6 +146,14 @@ a few caveats to be aware of:
         ```
     *   A more comprehensive parser could potentially modify input shadow roots
         to make this pattern possible.
+*   This particular implementation creates a number of `<div>` elements, which
+    can make styling and layout more difficult. A more intelligent parser could
+    potentially put the shadow roots onto existing rendered elements and avoid
+    changing the actual realized DOM structure.
+*   Because each `streamOutOfOrder` call creates a new shadow root, styles are
+    not inherited in child elements. Shadow DOM is providing style isolation we
+    don't actually want. Styles would need to be loaded inside each shadow root,
+    which can get complicated in practice.
 
 ## Internal
 

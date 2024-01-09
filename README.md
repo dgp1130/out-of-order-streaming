@@ -51,10 +51,12 @@ async function* render(): AsyncGenerator<string, void, void> {
   `;
 }
 
-function getSecondSlowly(): Promise<string> {
-  return new Promise((resolve) => {
+async function getSecondSlowly(): Promise<string> {
+  await new Promise((resolve) => {
     setTimeout(() => { resolve(); }, 1_000);
   });
+
+  return 'Second';
 }
 ```
 
